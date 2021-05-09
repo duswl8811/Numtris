@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?><DEFECTS><DEFECT>
+    <SFA>
+      <FILEPATH>d:\github\portfolio\windowsapi\numtris\numtris\</FILEPATH>
+      <FILENAME>numtris.cpp</FILENAME>
+      <LINE>127</LINE>
+      <COLUMN>0</COLUMN>
+    </SFA>
+    <DEFECTCODE>26495</DEFECTCODE>
+    <DESCRIPTION>Variable 'GameBoard::rect_game_block' is uninitialized. Always initialize a member variable (type.6).</DESCRIPTION>
+    <FUNCTION>GameBoard::{ctor}</FUNCTION>
+    <DECORATED>??0GameBoard@@QAE@XZ</DECORATED>
+    <FUNCLINE>127</FUNCLINE>
+    <PATH></PATH>
+  </DEFECT><DEFECT>
+    <SFA>
+      <FILEPATH>d:\github\portfolio\windowsapi\numtris\numtris\</FILEPATH>
+      <FILENAME>numtris.cpp</FILENAME>
+      <LINE>94</LINE>
+      <COLUMN>0</COLUMN>
+    </SFA>
+    <DEFECTCODE>26495</DEFECTCODE>
+    <DESCRIPTION>Variable 'Block::num' is uninitialized. Always initialize a member variable (type.6).</DESCRIPTION>
+    <FUNCTION>Block::{ctor}</FUNCTION>
+    <DECORATED>??0Block@@QAE@XZ</DECORATED>
+    <FUNCLINE>94</FUNCLINE>
+    <PATH></PATH>
+  </DEFECT></DEFECTS>
