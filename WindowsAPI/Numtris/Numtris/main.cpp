@@ -8,8 +8,8 @@
 
 #define MAX_LOADSTRING 100
 
-#define X_BLOCKS 5
-#define Y_BLOCKS 6
+//#define X_BLOCKS 5
+//#define Y_BLOCKS 6
 
 #define DOWNSPEED 5
 
@@ -102,22 +102,26 @@ class GameBoard
 
 	Size	block_size;
 	int		count = 0;
-
+	Pos		MAX_BLOCKS = { 5,6 };
 
 public:
-	Block	rect_game_block[50] = {};
+	// ★ 블록을 list 형태로 사용
+	Block	rect_game_block[63] = {};
 
 	void SetGameBoard(Pos _pos, int witdh, int height)
 	{
 		rect_game_board = NewSetRect(rect_game_board, _pos, witdh, height);
 
-		block_size.witdh = witdh / X_BLOCKS;
-		block_size.height = height / Y_BLOCKS;
+		block_size.witdh = witdh / MAX_BLOCKS.x;
+		block_size.height = height / MAX_BLOCKS.y;
 
 	}
+	void SetMaxBlocks(int x = 5, int y = 6) { MAX_BLOCKS.x = x; MAX_BLOCKS.y = y; }
+
 
 	RECT	GetGameBoard() { return rect_game_board; };
 	Size	GetBlockSize() { return block_size; };
+	Pos		GetMaxBlocks() { return MAX_BLOCKS; };
 	int		GetCount() {
 		return count;
 	};
@@ -240,15 +244,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 }
 
 
-
-void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) //1번 아이디 타이머 :: 주기적으로 블록 생성
+//1번 타이머 :: 블록 생성
+void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) 
 {
 	HDC hdc;
 	hdc = GetDC(hWnd);
 
 	// 생성 블록 렉트 세팅하기
 	//for (int i = 0; i <= Play_Board.GetCount(); ++i)
-	if (Play_Board.GetCount() < X_BLOCKS * Y_BLOCKS) {
+	if (Play_Board.GetCount() < Play_Board.GetMaxBlocks().x * Play_Board.GetMaxBlocks().y) {
 		Play_Board.rect_game_block[Play_Board.GetCount()].rect = NewSetRect(Play_Board.rect_game_block[Play_Board.GetCount()].rect,
 			{ Play_Board.GetGameBoard().right / 2 + Play_Board.GetBlockSize().witdh / 2 + 10 , Play_Board.GetGameBoard().top - Play_Board.GetBlockSize().height / 2 },
 			Play_Board.GetBlockSize().witdh,
@@ -262,7 +266,8 @@ void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) //1�
 	ReleaseDC(hWnd, hdc);
 }
 
-void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) //2번 아이디 타이머 :: 블록 드랍
+//2번 타이머 :: 블록 드랍
+void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) 
 {
 	HDC hdc;
 	hdc = GetDC(hWnd);
@@ -295,7 +300,8 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) //2번
 
 					Play_Board.rect_game_block[i].num *= 2;
 
-					// 블럭을 Y_BLOCK 만큼 저장해 놓고 높이가 걸리는 곳 마다 합친다
+					// ★ 작성 해야할 내용 ::
+					//		블럭을 Y_BLOCK 만큼 저장해 놓고 높이가 걸리는 곳 마다 합친다
 
 
 					KillTimer(hWnd, 2);
@@ -348,7 +354,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (wParam == VK_RETURN) {
 			//SetTimer(hWnd, 1, 1000, BlockCreate);
 
-			if (Play_Board.GetCount() < X_BLOCKS * Y_BLOCKS) {
+			if (Play_Board.GetCount() < Play_Board.GetMaxBlocks().x * Play_Board.GetMaxBlocks().y) {
 				Play_Board.rect_game_block[Play_Board.GetCount()].rect = NewSetRect(Play_Board.rect_game_block[Play_Board.GetCount()].rect,
 					{ Play_Board.GetGameBoard().right / 2 + Play_Board.GetBlockSize().witdh / 2 + 10 , Play_Board.GetGameBoard().top - Play_Board.GetBlockSize().height / 2 },
 					Play_Board.GetBlockSize().witdh,
@@ -367,6 +373,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (wParam == 'D') {
 			Play_Board.rect_game_block[Play_Board.GetCount()].BlockMove(RIGHT);
 		}
+
+		if (wParam == 'Z') {
+			Play_Board.SetMaxBlocks();
+			Play_Board.SetGameBoard({ 300,400 }, 400, 500);
+			KillTimer(hWnd, 2);
+		}
+		if (wParam == 'X') {
+			Play_Board.SetMaxBlocks(6,8);
+			Play_Board.SetGameBoard({ 300,400 }, 400, 500);
+			KillTimer(hWnd, 2);
+		}
+		if (wParam == 'C') {
+			Play_Board.SetMaxBlocks(7,9);
+			Play_Board.SetGameBoard({ 300,400 }, 400, 500);
+			KillTimer(hWnd, 2);
+		}
+
+
 
 		InvalidateRect(hWnd, NULL, TRUE);
 		//ReleaseDC(hWnd, hdc);
@@ -403,11 +427,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			Play_Board.GetGameBoard().right, Play_Board.GetGameBoard().bottom);
 
 		// game board 위에 줄 긋기
-		for (int i = 1; i < X_BLOCKS; ++i) {
+		for (int i = 1; i < Play_Board.GetMaxBlocks().x; ++i) {
 			MoveToEx(hdc, Play_Board.GetGameBoard().left + i * Play_Board.GetBlockSize().witdh, Play_Board.GetGameBoard().top, NULL);
 			LineTo(hdc, Play_Board.GetGameBoard().left + i * Play_Board.GetBlockSize().witdh, Play_Board.GetGameBoard().bottom);
 		}
-		for (int i = 1; i < Y_BLOCKS; ++i) {
+		for (int i = 1; i < Play_Board.GetMaxBlocks().y; ++i) {
 			MoveToEx(hdc, Play_Board.GetGameBoard().left, Play_Board.GetGameBoard().top + i * Play_Board.GetBlockSize().height, NULL);
 			LineTo(hdc, Play_Board.GetGameBoard().right, Play_Board.GetGameBoard().top + i * Play_Board.GetBlockSize().height);
 		}
