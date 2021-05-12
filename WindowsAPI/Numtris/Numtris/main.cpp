@@ -3,33 +3,31 @@
 #include <time.h>
 #include <string.h>
 #include <string>
+#include <list>
 #include "header.h"
 #include "Numtris.h"
 
 #define MAX_LOADSTRING 100
 
-//#define X_BLOCKS 5
-//#define Y_BLOCKS 6
-
 #define DOWNSPEED 5
 
-enum BLOCK_NUM_TYPE {
+enum Block_Num_Type {
 	A = 2, B = 4, C = 8, D = 16, E = 32, F = 64, G = 128
-} block_num_type;
+};
 
 enum DIRECT {
 	LEFT = 101, TOP = 102, RIGHT = 103, BOTTOM = 104
-} direct;
+};
 
 enum BLOCK_STATE {
 	IDLE = 111, DROP = 112, CHECK = 113
-} block_state;
+};
 
 
 typedef struct Pos
 {
 	int x; int y;
-}DOT;
+}MaxCount;
 
 typedef struct Size
 {
@@ -46,17 +44,22 @@ RECT NewSetRect(RECT rect, Pos _pos, int witdh, int height)
 	return rect;
 }
 
-struct Block
+class Block
 {
-	//public:
+public:
 	Pos		center_pos = { 0,0 };
 	RECT	rect;
-	int		num = 0;
 	int		state = IDLE;
+	Block_Num_Type	num = A;
 
-	int SetBlockNumType()
+	Block()
 	{
-		int value = rand() % 100;
+
+	}
+
+	Block_Num_Type SetBlockNumType()
+	{
+		int value = rand() % 40;
 
 		if (value < 20)			num = A;
 		else if (value < 40)	num = B;
@@ -69,6 +72,8 @@ struct Block
 		return num;
 	}
 
+	// ★ 수정 해야할 내용 ::
+	//		Move와 Down을 하나로 합치기 ( 용도 같음 )
 	void BlockMove(int _direct)
 	{
 		int witdh = rect.right - rect.left;
@@ -91,6 +96,23 @@ struct Block
 
 		rect = NewSetRect(rect, { center_pos.x, center_pos.y }, witdh, height);
 	}
+
+	void BlockLvUp(void)
+	{
+		num = Block_Num_Type(num << 1);
+	}
+
+	void NewSetRect2(Pos _pos, int witdh, int height)
+	{
+		rect.left = _pos.x - witdh / 2;
+		rect.right = _pos.x + witdh / 2;
+		rect.top = _pos.y - height / 2;
+		rect.bottom = _pos.y + height / 2;
+
+		center_pos.x = rect.right - witdh / 2;
+		center_pos.y = rect.bottom - height / 2;
+	}
+
 };
 
 
@@ -102,11 +124,11 @@ class GameBoard
 
 	Size	block_size;
 	int		count = 0;
-	Pos		MAX_BLOCKS = { 5,6 };
+	MaxCount MAX_BLOCKS = { 5,6 };
 
 public:
 	// ★ 블록을 list 형태로 사용
-	Block	rect_game_block[63] = {};
+	std::list<Block>	blocks;
 
 	void SetGameBoard(Pos _pos, int witdh, int height)
 	{
@@ -125,9 +147,13 @@ public:
 	int		GetCount() {
 		return count;
 	};
+	std::list<Block>::iterator GetNowBlock() {
+		return blocks.begin();
+	}
 
 	//void DrawGameBoard();
 	void CountUp(int v = 1) { count += v; }
+	
 };
 
 
@@ -243,6 +269,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	return TRUE;
 }
 
+void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
+void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 
 //1번 타이머 :: 블록 생성
 void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) 
@@ -250,17 +278,19 @@ void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 	HDC hdc;
 	hdc = GetDC(hWnd);
 
-	// 생성 블록 렉트 세팅하기
-	//for (int i = 0; i <= Play_Board.GetCount(); ++i)
-	if (Play_Board.GetCount() < Play_Board.GetMaxBlocks().x * Play_Board.GetMaxBlocks().y) {
-		Play_Board.rect_game_block[Play_Board.GetCount()].rect = NewSetRect(Play_Board.rect_game_block[Play_Board.GetCount()].rect,
-			{ Play_Board.GetGameBoard().right / 2 + Play_Board.GetBlockSize().witdh / 2 + 10 , Play_Board.GetGameBoard().top - Play_Board.GetBlockSize().height / 2 },
+	// 블록 생성 & 렉트 세팅
+	if (Play_Board.GetCount() < Play_Board.GetMaxBlocks().x * Play_Board.GetMaxBlocks().y)
+	{
+		Play_Board.blocks.push_front(Block());
+
+		Play_Board.GetNowBlock()->NewSetRect2({ Play_Board.GetGameBoard().right / 2 + Play_Board.GetBlockSize().witdh / 2 + 10 , Play_Board.GetGameBoard().top - Play_Board.GetBlockSize().height / 2 },
 			Play_Board.GetBlockSize().witdh,
 			Play_Board.GetBlockSize().height);
-		Play_Board.rect_game_block[Play_Board.GetCount()].SetBlockNumType();
+		Play_Board.GetNowBlock()->SetBlockNumType();
 	}
 
-	Play_Board.CountUp();
+	SetTimer(hWnd, 2, 100, (TIMERPROC)BlockDrop);
+	KillTimer(hWnd, 1);
 
 	InvalidateRect(hWnd, NULL, TRUE);
 	ReleaseDC(hWnd, hdc);
@@ -272,48 +302,63 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 	HDC hdc;
 	hdc = GetDC(hWnd);
 
+	std::list<Block>::const_iterator iter = Play_Board.blocks.cbegin();
 
-	for (int i = Play_Board.GetCount(); i >= 0; --i)
+	for (iter; iter!= Play_Board.blocks.cend();)
 	{
-		if (Play_Board.rect_game_block[Play_Board.GetCount()].rect.bottom < Play_Board.GetGameBoard().bottom) {
-			if (i == Play_Board.GetCount())
+		if (Play_Board.GetNowBlock()->rect.bottom < Play_Board.GetGameBoard().bottom) 
+		{
+			if (iter == Play_Board.blocks.begin())
 			{
-				Play_Board.rect_game_block[Play_Board.GetCount()].BlockDown(10);
+				Play_Board.GetNowBlock()->BlockDown(10);
+				++iter;
 				continue;
 			}
-			// 충돌
-			if (Play_Board.rect_game_block[Play_Board.GetCount()].rect.bottom > Play_Board.rect_game_block[i].rect.top &&
-				Play_Board.rect_game_block[Play_Board.GetCount()].center_pos.x > Play_Board.rect_game_block[i].rect.left &&
-				Play_Board.rect_game_block[Play_Board.GetCount()].center_pos.x < Play_Board.rect_game_block[i].rect.right)
+			// ★ 수정 해야할 내용 ::
+			//		충돌처리 함수로 변경
+			if (Play_Board.GetNowBlock()->rect.bottom > iter->rect.top &&
+				Play_Board.GetNowBlock()->center_pos.x > iter->rect.left &&
+				Play_Board.GetNowBlock()->center_pos.x < iter->rect.right)
 			{
-				if (Play_Board.rect_game_block[Play_Board.GetCount()].num != Play_Board.rect_game_block[i].num)
+				if (Play_Board.GetNowBlock()->num != iter->num)
 				{
+					++iter;
+					Play_Board.blocks.push_front(Block());
+
 					Play_Board.CountUp();
 					KillTimer(hWnd, 2);
+					SetTimer(hWnd, 1, 100, (TIMERPROC)BlockCreate);
+					break;
 				}
-				else if (Play_Board.rect_game_block[Play_Board.GetCount()].num == Play_Board.rect_game_block[i].num) // 블럭끼리 합쳐짐
+
+				// ★ 수정 해야할 내용 ::
+				//		블럭 좌우도 흡수해야함
+				else if (Play_Board.blocks.begin()->num == iter->num) // 블럭끼리 합쳐짐
 				{
-					//Play_Board.CountUp();
-					// now block 을 초기화
-					Play_Board.rect_game_block[Play_Board.GetCount()].rect = NewSetRect(Play_Board.rect_game_block[Play_Board.GetCount()].rect, { 0,0 }, 0, 0);
-					Play_Board.rect_game_block[Play_Board.GetCount()].num = 0;
+					Play_Board.GetNowBlock()->BlockLvUp();
 
-					Play_Board.rect_game_block[i].num *= 2;
+					Play_Board.blocks.erase(iter++);
 
-					// ★ 작성 해야할 내용 ::
-					//		블럭을 Y_BLOCK 만큼 저장해 놓고 높이가 걸리는 곳 마다 합친다
-
-
-					KillTimer(hWnd, 2);
+					//KillTimer(hWnd, 2);
+					// 연쇄작동함
+					break;
 				}
 			}
-		}
-		else {
+			else
+			{
+				++iter;
+			}
+		}	
+		else
+		{
+			++iter;
+
 			Play_Board.CountUp();
+			SetTimer(hWnd, 1, 100, (TIMERPROC)BlockCreate);
 			KillTimer(hWnd, 2);
+			break;
 		}
 	}
-
 
 	InvalidateRect(hWnd, NULL, TRUE);
 	ReleaseDC(hWnd, hdc);
@@ -341,39 +386,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 	{
 		Play_Board.SetGameBoard({ 300,400 }, 400, 500);
-		//std::cout << Play_Board.GetGameBoard().bottom;
-
-
 	}
 
 	break;
 	case WM_KEYDOWN:
 	{
-		//HDC hdc = GetDC(hWnd);
-
 		if (wParam == VK_RETURN) {
-			//SetTimer(hWnd, 1, 1000, BlockCreate);
-
-			if (Play_Board.GetCount() < Play_Board.GetMaxBlocks().x * Play_Board.GetMaxBlocks().y) {
-				Play_Board.rect_game_block[Play_Board.GetCount()].rect = NewSetRect(Play_Board.rect_game_block[Play_Board.GetCount()].rect,
-					{ Play_Board.GetGameBoard().right / 2 + Play_Board.GetBlockSize().witdh / 2 + 10 , Play_Board.GetGameBoard().top - Play_Board.GetBlockSize().height / 2 },
-					Play_Board.GetBlockSize().witdh,
-					Play_Board.GetBlockSize().height);
-				Play_Board.rect_game_block[Play_Board.GetCount()].SetBlockNumType();
-			}
-			SetTimer(hWnd, 2, 100, (TIMERPROC)BlockDrop);
-
-
+			// 엔터 누르면 게임 시작
+			SetTimer(hWnd, 1, 1000, BlockCreate);
 		}
 
+		// ★ 수정 해야할 내용 ::
+		//		좌우에 충돌체가 있을 경우 이동 금지
 		if (wParam == 'A') {
-			Play_Board.rect_game_block[Play_Board.GetCount()].BlockMove(LEFT);
+			Play_Board.GetNowBlock()->BlockMove(LEFT);
 		}
-
 		if (wParam == 'D') {
-			Play_Board.rect_game_block[Play_Board.GetCount()].BlockMove(RIGHT);
+			Play_Board.GetNowBlock()->BlockMove(RIGHT);
 		}
 
+		// ★ 수정 해야할 내용 ::
+		//		판 크기가 변경 되었을 경우 게임 새로 시작
+		//		메뉴를 통해 판 크기 변경
 		if (wParam == 'Z') {
 			Play_Board.SetMaxBlocks();
 			Play_Board.SetGameBoard({ 300,400 }, 400, 500);
@@ -393,7 +427,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 
 		InvalidateRect(hWnd, NULL, TRUE);
-		//ReleaseDC(hWnd, hdc);
 		break;
 	}
 	break;
@@ -437,15 +470,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 
 		// block 그리기
-		for (int i = 0; i <= Play_Board.GetCount(); ++i) {
+		std::list<Block>::iterator iter = Play_Board.blocks.begin();
+
+		for (iter; iter != Play_Board.blocks.end(); iter++)
+		{
 			TCHAR str[5];
-			wsprintf(str, TEXT("%d"), Play_Board.rect_game_block[i].num);
+			wsprintf(str, TEXT("%d"), iter->num);
 
-			Rectangle(hdc, Play_Board.rect_game_block[i].rect.left, Play_Board.rect_game_block[i].rect.top,
-				Play_Board.rect_game_block[i].rect.right, Play_Board.rect_game_block[i].rect.bottom);
-			//DrawText(hdc, (LPCWSTR)Play_Board.rect_game_block[i].num, lstrlen((LPCWSTR)Play_Board.rect_game_block[i].num), &Play_Board.rect_game_block[i].rect, DT_CENTER | DT_VCENTER);
-			DrawText(hdc, str, lstrlen(str), &Play_Board.rect_game_block[i].rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
-
+			Rectangle(hdc, iter->rect.left, iter->rect.top, iter->rect.right, iter->rect.bottom);
+			DrawText(hdc, str, lstrlen(str), &iter->rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 		}
 
 
