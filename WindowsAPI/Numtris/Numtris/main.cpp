@@ -19,10 +19,17 @@ enum DIRECT {
 	LEFT = 101, TOP = 102, RIGHT = 103, BOTTOM = 104
 };
 
-enum BLOCK_STATE {
+enum Block_State {
 	IDLE = 111, DROP = 112, CHECK = 113
 };
 
+enum Timer_Name {
+	NAME_BLOCK_CREATE, NAME_BLOCK_DROP
+};
+
+enum Timer_Time {
+	TIME_BLOCK_CREATE = 100, TIME_BLOCK_DROP = 100
+};
 
 typedef struct Pos
 {
@@ -72,9 +79,7 @@ public:
 		return num;
 	}
 
-	// ★ 수정 해야할 내용 ::
-	//		Move와 Down을 하나로 합치기 ( 용도 같음 )
-	void BlockMove(int _direct)
+	void BlockMove(int _direct, int speed = DOWNSPEED)
 	{
 		int witdh = rect.right - rect.left;
 		int height = rect.bottom - rect.top;
@@ -83,16 +88,9 @@ public:
 
 		if (_direct == LEFT)		center_pos.x -= witdh;
 		else if (_direct == RIGHT)	center_pos.x += witdh;
-
-		rect = NewSetRect(rect, { center_pos.x, center_pos.y }, witdh, height);
-	}
-
-	void BlockDown(int speed = DOWNSPEED)
-	{
-		int witdh = rect.right - rect.left;
-		int height = rect.bottom - rect.top;
-		center_pos.x = rect.right - witdh / 2;
-		center_pos.y = rect.bottom - height / 2 + speed;
+		else if (_direct == BOTTOM) {
+			center_pos.y += speed;
+		}
 
 		rect = NewSetRect(rect, { center_pos.x, center_pos.y }, witdh, height);
 	}
@@ -127,7 +125,6 @@ class GameBoard
 	MaxCount MAX_BLOCKS = { 5,6 };
 
 public:
-	// ★ 블록을 list 형태로 사용
 	std::list<Block>	blocks;
 
 	void SetGameBoard(Pos _pos, int witdh, int height)
@@ -289,8 +286,8 @@ void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 		Play_Board.GetNowBlock()->SetBlockNumType();
 	}
 
-	SetTimer(hWnd, 2, 100, (TIMERPROC)BlockDrop);
-	KillTimer(hWnd, 1);
+	SetTimer(hWnd, NAME_BLOCK_DROP, TIME_BLOCK_DROP, (TIMERPROC)BlockDrop);
+	KillTimer(hWnd, NAME_BLOCK_CREATE);
 
 	InvalidateRect(hWnd, NULL, TRUE);
 	ReleaseDC(hWnd, hdc);
@@ -310,7 +307,7 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 		{
 			if (iter == Play_Board.blocks.begin())
 			{
-				Play_Board.GetNowBlock()->BlockDown(10);
+				Play_Board.GetNowBlock()->BlockMove(BOTTOM, 10);
 				++iter;
 				continue;
 			}
@@ -326,8 +323,8 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 					Play_Board.blocks.push_front(Block());
 
 					Play_Board.CountUp();
-					KillTimer(hWnd, 2);
-					SetTimer(hWnd, 1, 100, (TIMERPROC)BlockCreate);
+					KillTimer(hWnd, NAME_BLOCK_DROP);
+					SetTimer(hWnd, NAME_BLOCK_CREATE, TIME_BLOCK_CREATE, (TIMERPROC)BlockCreate);
 					break;
 				}
 
@@ -354,8 +351,8 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 			++iter;
 
 			Play_Board.CountUp();
-			SetTimer(hWnd, 1, 100, (TIMERPROC)BlockCreate);
-			KillTimer(hWnd, 2);
+			SetTimer(hWnd, NAME_BLOCK_CREATE, TIME_BLOCK_CREATE, (TIMERPROC)BlockCreate);
+			KillTimer(hWnd, NAME_BLOCK_DROP);
 			break;
 		}
 	}
@@ -393,7 +390,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		if (wParam == VK_RETURN) {
 			// 엔터 누르면 게임 시작
-			SetTimer(hWnd, 1, 1000, BlockCreate);
+			SetTimer(hWnd, NAME_BLOCK_CREATE, TIME_BLOCK_CREATE, BlockCreate);
 		}
 
 		// ★ 수정 해야할 내용 ::
@@ -411,17 +408,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (wParam == 'Z') {
 			Play_Board.SetMaxBlocks();
 			Play_Board.SetGameBoard({ 300,400 }, 400, 500);
-			KillTimer(hWnd, 2);
+			KillTimer(hWnd, NAME_BLOCK_DROP);
 		}
 		if (wParam == 'X') {
 			Play_Board.SetMaxBlocks(6,8);
 			Play_Board.SetGameBoard({ 300,400 }, 400, 500);
-			KillTimer(hWnd, 2);
+			KillTimer(hWnd, NAME_BLOCK_DROP);
 		}
 		if (wParam == 'C') {
 			Play_Board.SetMaxBlocks(7,9);
 			Play_Board.SetGameBoard({ 300,400 }, 400, 500);
-			KillTimer(hWnd, 2);
+			KillTimer(hWnd, NAME_BLOCK_DROP);
 		}
 
 
