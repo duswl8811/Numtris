@@ -1,4 +1,4 @@
 ﻿  main.cpp
 d:\github\portfolio\windowsapi\numtris\numtris\main.cpp(42): warning C4091: 'typedef ': 변수를 선언하지 않으면 'Size' 왼쪽은 무시됩니다.
-d:\github\portfolio\windowsapi\numtris\numtris\main.cpp(258): warning C4244: '인수': 'time_t'에서 'unsigned int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-  Numtris.vcxproj -> D:\GitHub\Portfolio\WindowsAPI\Numtris\Debug\Numtris.exe
+d:\github\portfolio\windowsapi\numtris\numtris\main.cpp(266): warning C4244: '인수': 'time_t'에서 'unsigned int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+d:\github\portfolio\windowsapi\numtris\numtris\main.cpp(416): error C2227: '->state' 왼쪽은 클래스/구조체/공용 구조체/제네릭 형식을 가리켜야 합니다.

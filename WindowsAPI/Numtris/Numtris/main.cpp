@@ -51,6 +51,16 @@ RECT NewSetRect(RECT rect, Pos _pos, int witdh, int height)
 	return rect;
 }
 
+bool RectToRectCollision(RECT _rect, RECT _rect2, Pos _pos = { 0,0 }) // 바운딩 체크
+{
+	if (_rect.bottom+_pos.y > _rect2.top &&
+		_rect.top+ _pos.y < _rect2.bottom &&
+		_rect.right+ _pos.x > _rect2.left &&
+		_rect.left+ _pos.x < _rect2.right)
+		return true;
+	return false;
+}
+
 class Block
 {
 public:
@@ -266,6 +276,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	return TRUE;
 }
 
+
+// Timer 함수 선언
 void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 
@@ -311,11 +323,9 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 				++iter;
 				continue;
 			}
-			// ★ 수정 해야할 내용 ::
-			//		충돌처리 함수로 변경
-			if (Play_Board.GetNowBlock()->rect.bottom > iter->rect.top &&
-				Play_Board.GetNowBlock()->center_pos.x > iter->rect.left &&
-				Play_Board.GetNowBlock()->center_pos.x < iter->rect.right)
+
+			// 블럭이 충돌한 경우
+			if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect))
 			{
 				if (Play_Board.GetNowBlock()->num != iter->num)
 				{
@@ -375,9 +385,6 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 //
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-
-
-
 	switch (message)
 	{
 	case WM_CREATE:
@@ -395,11 +402,35 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		// ★ 수정 해야할 내용 ::
 		//		좌우에 충돌체가 있을 경우 이동 금지
+
 		if (wParam == 'A') {
-			Play_Board.GetNowBlock()->BlockMove(LEFT);
+			if (Play_Board.blocks.size() == 1) {
+				Play_Board.GetNowBlock()->BlockMove(LEFT);
+				break;
+			}
+
+			std::list<Block>::const_iterator iter = ++Play_Board.blocks.cbegin();
+			for (iter; iter != Play_Board.blocks.cend(); iter) {
+				if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect, { -Play_Board.GetBlockSize().witdh, 0 }))
+					break;
+				if (++iter == Play_Board.blocks.cend())
+					Play_Board.GetNowBlock()->BlockMove(LEFT);
+			}
 		}
+
 		if (wParam == 'D') {
-			Play_Board.GetNowBlock()->BlockMove(RIGHT);
+			if (Play_Board.blocks.size() == 1) {
+				Play_Board.GetNowBlock()->BlockMove(RIGHT);
+				break;
+			}
+
+			std::list<Block>::const_iterator iter = ++Play_Board.blocks.cbegin();
+			for (iter; iter != Play_Board.blocks.cend(); iter) {
+				if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect, { Play_Board.GetBlockSize().witdh, 0 }))
+					break;
+				if (++iter == Play_Board.blocks.cend())
+					Play_Board.GetNowBlock()->BlockMove(RIGHT);
+			}
 		}
 
 		// ★ 수정 해야할 내용 ::
