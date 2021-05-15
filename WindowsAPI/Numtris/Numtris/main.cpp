@@ -66,7 +66,7 @@ class Block
 public:
 	Pos		center_pos = { 0,0 };
 	RECT	rect;
-	int		state = IDLE;
+	Block_State		state = IDLE;
 	Block_Num_Type	num = A;
 
 	Block()
@@ -327,6 +327,8 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 			// 블럭이 충돌한 경우
 			if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect))
 			{
+				Play_Board.GetNowBlock()->state = CHECK;
+
 				if (Play_Board.GetNowBlock()->num != iter->num)
 				{
 					++iter;
@@ -403,7 +405,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// ★ 수정 해야할 내용 ::
 		//		좌우에 충돌체가 있을 경우 이동 금지
 
-		if (wParam == 'A') {
+		if (wParam == 'A' && Play_Board.GetNowBlock()->state != CHECK) {
 			if (Play_Board.blocks.size() == 1) {
 				Play_Board.GetNowBlock()->BlockMove(LEFT);
 				break;
@@ -418,7 +420,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 		}
 
-		if (wParam == 'D') {
+		if (wParam == 'D' && Play_Board.GetNowBlock()->state != CHECK) {
 			if (Play_Board.blocks.size() == 1) {
 				Play_Board.GetNowBlock()->BlockMove(RIGHT);
 				break;
