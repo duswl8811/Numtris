@@ -20,15 +20,15 @@ enum DIRECT {
 };
 
 enum Block_State {
-	IDLE = 111, DROP = 112, CHECK = 113
+	IDLE = 111, DROP = 112, CHECK = 113, PULL = 114, 
 };
 
 enum Timer_Name {
-	NAME_BLOCK_CREATE, NAME_BLOCK_DROP
+	NAME_BLOCK_CREATE, NAME_BLOCK_DROP, NAME_BLOCK_PULL
 };
 
 enum Timer_Time {
-	TIME_BLOCK_CREATE = 100, TIME_BLOCK_DROP = 100
+	TIME_BLOCK_CREATE = 100, TIME_BLOCK_DROP = 50, TIME_BLOCK_PULL = 50
 };
 
 typedef struct Pos
@@ -76,7 +76,7 @@ public:
 
 	Block_Num_Type SetBlockNumType()
 	{
-		int value = rand() % 40;
+		int value = rand() % 20;
 
 		if (value < 20)			num = A;
 		else if (value < 40)	num = B;
@@ -101,6 +101,9 @@ public:
 		else if (_direct == BOTTOM) {
 			center_pos.y += speed;
 		}
+		else if (_direct == TOP) {
+			center_pos.y -= speed;
+		}
 
 		rect = NewSetRect(rect, { center_pos.x, center_pos.y }, witdh, height);
 	}
@@ -108,6 +111,11 @@ public:
 	void BlockLvUp(void)
 	{
 		num = Block_Num_Type(num << 1);
+	}
+
+	void BlockStateChange(const Block_State &st)
+	{
+		state = st;
 	}
 
 	void NewSetRect2(Pos _pos, int witdh, int height)
@@ -280,6 +288,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 // Timer 함수 선언
 void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
+void CALLBACK BlockPull(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 
 //1번 타이머 :: 블록 생성
 void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) 
@@ -311,9 +320,9 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 	HDC hdc;
 	hdc = GetDC(hWnd);
 
-	std::list<Block>::const_iterator iter = Play_Board.blocks.cbegin();
+	std::list<Block>::iterator iter = Play_Board.blocks.begin();
 
-	for (iter; iter!= Play_Board.blocks.cend();)
+	for (iter; iter!= Play_Board.blocks.cend() && Play_Board.GetNowBlock()->state != CHECK;)
 	{
 		if (Play_Board.GetNowBlock()->rect.bottom < Play_Board.GetGameBoard().bottom) 
 		{
@@ -328,6 +337,7 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 			if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect))
 			{
 				Play_Board.GetNowBlock()->state = CHECK;
+				iter->BlockStateChange(CHECK);
 
 				if (Play_Board.GetNowBlock()->num != iter->num)
 				{
@@ -344,11 +354,14 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 				//		블럭 좌우도 흡수해야함
 				else if (Play_Board.blocks.begin()->num == iter->num) // 블럭끼리 합쳐짐
 				{
-					Play_Board.GetNowBlock()->BlockLvUp();
+					iter->BlockStateChange(PULL);
+					//Play_Board.GetNowBlock()->BlockLvUp();
 
-					Play_Board.blocks.erase(iter++);
+					//Play_Board.blocks.erase(iter++);
 
-					//KillTimer(hWnd, 2);
+
+					KillTimer(hWnd, 2);
+					SetTimer(hWnd, NAME_BLOCK_PULL, TIME_BLOCK_PULL, (TIMERPROC)BlockPull);
 					// 연쇄작동함
 					break;
 				}
@@ -373,7 +386,46 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 	ReleaseDC(hWnd, hdc);
 }
 
+//3번 타이머 :: 블록 당기기
+void CALLBACK BlockPull(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
+{
+	HDC hdc;
+	hdc = GetDC(hWnd);
+	Pos move_pos = { 0, 0 };
 
+	std::list<Block>::iterator iter = Play_Board.blocks.begin();
+
+	for (iter; iter != Play_Board.blocks.cend();)
+	{
+		if (iter->state == PULL)
+		{
+			// 하단
+			if (Play_Board.GetNowBlock()->center_pos.y < iter->center_pos.y)
+				iter->BlockMove(TOP, 5);
+			// 좌
+
+
+			// 우
+
+
+			// 같아짐
+			if (Play_Board.GetNowBlock()->center_pos.y >= iter->center_pos.y)
+			{
+				Play_Board.GetNowBlock()->BlockLvUp();
+				Play_Board.blocks.erase(iter++);
+				Play_Board.GetNowBlock()->state = DROP;
+				//iter->state = IDLE;
+				KillTimer(hWnd, 3);
+				SetTimer(hWnd, NAME_BLOCK_DROP, TIME_BLOCK_DROP, (TIMERPROC)BlockDrop);
+				break;
+			}
+		}
+			++iter;
+	}
+
+	InvalidateRect(hWnd, NULL, TRUE);
+	ReleaseDC(hWnd, hdc);
+}
 
 //
 //  함수: WndProc(HWND, UINT, WPARAM, LPARAM)
@@ -405,7 +457,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// ★ 수정 해야할 내용 ::
 		//		좌우에 충돌체가 있을 경우 이동 금지
 
-		if (wParam == 'A' && Play_Board.GetNowBlock()->state != CHECK) {
+		if (wParam == 'A' && Play_Board.GetNowBlock()->state == IDLE) {
 			if (Play_Board.blocks.size() == 1) {
 				Play_Board.GetNowBlock()->BlockMove(LEFT);
 				break;
@@ -420,7 +472,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 		}
 
-		if (wParam == 'D' && Play_Board.GetNowBlock()->state != CHECK) {
+		if (wParam == 'D' && Play_Board.GetNowBlock()->state == IDLE) {
 			if (Play_Board.blocks.size() == 1) {
 				Play_Board.GetNowBlock()->BlockMove(RIGHT);
 				break;
