@@ -24,11 +24,11 @@ enum Block_State {
 };
 
 enum Timer_Name {
-	NAME_BLOCK_CREATE, NAME_BLOCK_DROP, NAME_BLOCK_PULL
+	NAME_BLOCK_CREATE = 1, NAME_BLOCK_DROP, NAME_BLOCK_PULL, NAME_BLOCK_CHECK
 };
 
 enum Timer_Time {
-	TIME_BLOCK_CREATE = 100, TIME_BLOCK_DROP = 50, TIME_BLOCK_PULL = 50
+	TIME_BLOCK_CREATE = 1, TIME_BLOCK_DROP = 50, TIME_BLOCK_PULL = 20, TIME_BLOCK_CHECK = 1
 };
 
 typedef struct Pos
@@ -76,7 +76,7 @@ public:
 
 	Block_Num_Type SetBlockNumType()
 	{
-		int value = rand() % 20;
+		int value = rand() % 100;
 
 		if (value < 20)			num = A;
 		else if (value < 40)	num = B;
@@ -89,15 +89,21 @@ public:
 		return num;
 	}
 
-	void BlockMove(int _direct, int speed = DOWNSPEED)
+	void BlockMove(int type, int _direct, int speed = DOWNSPEED)
 	{
+		// type 1 : speed 만큼 움직이기
+		// type 2 : 블럭 크기 만큼 움직이기
+
 		int witdh = rect.right - rect.left;
 		int height = rect.bottom - rect.top;
 		center_pos.x = rect.right - witdh / 2;
 		center_pos.y = rect.bottom - height / 2;
 
-		if (_direct == LEFT)		center_pos.x -= witdh;
-		else if (_direct == RIGHT)	center_pos.x += witdh;
+		if (type == 2)
+			speed = witdh;
+
+		if (_direct == LEFT)		center_pos.x -= speed;
+		else if (_direct == RIGHT)	center_pos.x += speed;
 		else if (_direct == BOTTOM) {
 			center_pos.y += speed;
 		}
@@ -106,6 +112,25 @@ public:
 		}
 
 		rect = NewSetRect(rect, { center_pos.x, center_pos.y }, witdh, height);
+	}
+
+	// ★ :: 블럭 검사용 - 2021/05/22
+	RECT BlockMoveCheck(int _direct, int speed = DOWNSPEED)
+	{
+		int witdh = rect.right - rect.left;
+		int height = rect.bottom - rect.top;
+		Pos _center_pos = { rect.right - witdh / 2, rect.bottom - height / 2 };
+		RECT _rect = rect;
+		if (_direct == LEFT)		_center_pos.x -= speed;
+		else if (_direct == RIGHT)	_center_pos.x += speed;
+		else if (_direct == BOTTOM) {
+			_center_pos.y += speed;
+		}
+		else if (_direct == TOP) {
+			_center_pos.y -= speed;
+		}
+
+		return _rect = NewSetRect(_rect, { _center_pos.x, _center_pos.y - speed }, witdh, height);
 	}
 
 	void BlockLvUp(void)
@@ -289,6 +314,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 void CALLBACK BlockPull(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
+void CALLBACK BlockCheck(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime);
 
 //1번 타이머 :: 블록 생성
 void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime) 
@@ -305,10 +331,15 @@ void CALLBACK BlockCreate(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 			Play_Board.GetBlockSize().witdh,
 			Play_Board.GetBlockSize().height);
 		Play_Board.GetNowBlock()->SetBlockNumType();
+
+		Play_Board.GetNowBlock()->state = DROP;
+		KillTimer(hWnd, NAME_BLOCK_CREATE);
+		SetTimer(hWnd, NAME_BLOCK_DROP, TIME_BLOCK_DROP, (TIMERPROC)BlockDrop);
+
 	}
 
-	SetTimer(hWnd, NAME_BLOCK_DROP, TIME_BLOCK_DROP, (TIMERPROC)BlockDrop);
-	KillTimer(hWnd, NAME_BLOCK_CREATE);
+
+
 
 	InvalidateRect(hWnd, NULL, TRUE);
 	ReleaseDC(hWnd, hdc);
@@ -320,66 +351,88 @@ void CALLBACK BlockDrop(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 	HDC hdc;
 	hdc = GetDC(hWnd);
 
-	std::list<Block>::iterator iter = Play_Board.blocks.begin();
 
-	for (iter; iter!= Play_Board.blocks.cend() && Play_Board.GetNowBlock()->state != CHECK;)
+	// 내 블럭이...
+	// 1. 바닥에 닿았는가?
+	// 2. 다른 블럭과 닿았는가?
+
+	// 1. no 2. no --> 아래로 내려간다
+	// 전체 블럭과 체크 해야함
+	// 모든 블럭과 체크 해서 바닥에 닿지 않았으면 내려간다.
+	// 체크와 하나라도 만나면 다음 단계
+
+	// 충돌체크 true인 경우 좌우아래 블럭의 num을 검사한다.
+	// num이 같은 블럭은 pull 상태로 바꾼다.
+	// 현재 timer를 죽이고 pull timer를 부른다.
+
+	// pull timer 실행
+	// 전체 검사를 한다. 
+	// pull인 상태의 블럭이 있으면 어느쪽 블럭인지 확인하고, 같아질때까지 타이머를 돌린다.
+	// pull이 없는 경우 현재 timer를 죽인다.
+
+	// 전체 블럭과 충돌한 것이 있는지 확인
+
+	int check_count = 0;
+
+	std::list<Block>::iterator iter = Play_Board.blocks.begin();
+	for (iter; iter != Play_Board.blocks.end(); )
 	{
-		if (Play_Board.GetNowBlock()->rect.bottom < Play_Board.GetGameBoard().bottom) 
+		// 바닥에 닿음
+		if (Play_Board.GetNowBlock()->rect.bottom >= Play_Board.GetGameBoard().bottom)
 		{
-			if (iter == Play_Board.blocks.begin())
+			// 좌우 num 확인
+			// 현재 타이머 죽이고 check timer 실행
+			Play_Board.GetNowBlock()->state = CHECK;
+
+			++check_count;
+			KillTimer(hWnd, 2);
+			SetTimer(hWnd, NAME_BLOCK_CHECK, TIME_BLOCK_CHECK, (TIMERPROC)BlockCheck);
+			break;
+		}
+
+		// 바닥에 안닿음
+		else
+		{
+			// 블럭 충돌 확인
+			
+			// 사이즈 확인
+			if (Play_Board.blocks.size() == 1)
 			{
-				Play_Board.GetNowBlock()->BlockMove(BOTTOM, 10);
+				break;
+			}
+			// 검사 블럭이 나 자신인 경우
+			else if (iter == Play_Board.blocks.begin())
+			{
 				++iter;
 				continue;
 			}
 
-			// 블럭이 충돌한 경우
+			// 블럭 충돌함 --> CHECK 상태로 변경 --> 다음 블럭 확인
 			if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect))
 			{
+				++check_count;
 				Play_Board.GetNowBlock()->state = CHECK;
-				iter->BlockStateChange(CHECK);
+				KillTimer(hWnd, 2);
+				SetTimer(hWnd, NAME_BLOCK_CHECK, TIME_BLOCK_CHECK, (TIMERPROC)BlockCheck);
 
-				if (Play_Board.GetNowBlock()->num != iter->num)
-				{
-					++iter;
-					Play_Board.blocks.push_front(Block());
-
-					Play_Board.CountUp();
-					KillTimer(hWnd, NAME_BLOCK_DROP);
-					SetTimer(hWnd, NAME_BLOCK_CREATE, TIME_BLOCK_CREATE, (TIMERPROC)BlockCreate);
-					break;
-				}
-
-				// ★ 수정 해야할 내용 ::
-				//		블럭 좌우도 흡수해야함
-				else if (Play_Board.blocks.begin()->num == iter->num) // 블럭끼리 합쳐짐
-				{
-					iter->BlockStateChange(PULL);
-					//Play_Board.GetNowBlock()->BlockLvUp();
-
-					//Play_Board.blocks.erase(iter++);
-
-
-					KillTimer(hWnd, 2);
-					SetTimer(hWnd, NAME_BLOCK_PULL, TIME_BLOCK_PULL, (TIMERPROC)BlockPull);
-					// 연쇄작동함
-					break;
-				}
+				++iter;
+				continue;
 			}
+			// 블럭 충돌 안함 --> 다음 블럭 확인
 			else
 			{
 				++iter;
+				continue;
 			}
-		}	
-		else
-		{
-			++iter;
-
-			Play_Board.CountUp();
-			SetTimer(hWnd, NAME_BLOCK_CREATE, TIME_BLOCK_CREATE, (TIMERPROC)BlockCreate);
-			KillTimer(hWnd, NAME_BLOCK_DROP);
-			break;
 		}
+	}
+
+	// 충돌이 없으면 내려감
+	if (!check_count)
+	{
+		Play_Board.GetNowBlock()->BlockMove(1, BOTTOM, 10);
+		KillTimer(hWnd, 2);
+		SetTimer(hWnd, NAME_BLOCK_DROP, TIME_BLOCK_DROP, (TIMERPROC)BlockDrop);
 	}
 
 	InvalidateRect(hWnd, NULL, TRUE);
@@ -392,40 +445,96 @@ void CALLBACK BlockPull(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
 	HDC hdc;
 	hdc = GetDC(hWnd);
 	Pos move_pos = { 0, 0 };
+	int pull_count = 0;
 
+	Play_Board.GetNowBlock()->state = CHECK;
 	std::list<Block>::iterator iter = Play_Board.blocks.begin();
-
 	for (iter; iter != Play_Board.blocks.cend();)
 	{
 		if (iter->state == PULL)
 		{
+			++pull_count;
+
 			// 하단
 			if (Play_Board.GetNowBlock()->center_pos.y < iter->center_pos.y)
-				iter->BlockMove(TOP, 5);
-			// 좌
+				iter->BlockMove(1, TOP, 5);
 
+			// 좌
+			else if (Play_Board.GetNowBlock()->center_pos.x > iter->center_pos.x)
+				iter->BlockMove(1, RIGHT, 5);
 
 			// 우
+			else if (Play_Board.GetNowBlock()->center_pos.x < iter->center_pos.x)
+				iter->BlockMove(1, LEFT, 5);
+
 
 
 			// 같아짐
-			if (Play_Board.GetNowBlock()->center_pos.y >= iter->center_pos.y)
+			if (Play_Board.GetNowBlock()->center_pos.y >= iter->center_pos.y
+				&& Play_Board.GetNowBlock()->center_pos.x == iter->center_pos.x)
 			{
 				Play_Board.GetNowBlock()->BlockLvUp();
 				Play_Board.blocks.erase(iter++);
-				Play_Board.GetNowBlock()->state = DROP;
+				Play_Board.GetNowBlock()->state = CHECK;
 				//iter->state = IDLE;
 				KillTimer(hWnd, 3);
 				SetTimer(hWnd, NAME_BLOCK_DROP, TIME_BLOCK_DROP, (TIMERPROC)BlockDrop);
-				break;
+				continue;
 			}
-		}
 			++iter;
+		}
+		else
+			++iter;
+	}
+
+	if (!pull_count) {
+		KillTimer(hWnd, 3);
+		SetTimer(hWnd, NAME_BLOCK_CREATE, TIME_BLOCK_CREATE, (TIMERPROC)BlockCreate);
 	}
 
 	InvalidateRect(hWnd, NULL, TRUE);
 	ReleaseDC(hWnd, hdc);
 }
+
+//4번 타이머 :: 블록 넘 체크
+void CALLBACK BlockCheck(HWND hWnd, UINT uMsg, UINT idEvent, DWORD dwTime)
+{
+	HDC hdc;
+	hdc = GetDC(hWnd);
+
+	// 좌우아래 블럭의 num을 검사한다.
+	// num이 같은 블럭은 pull 상태로 바꾼다.
+	// 현재 timer를 죽이고 pull timer를 부른다.
+
+	Play_Board.GetNowBlock()->state = CHECK;
+
+	std::list<Block>::iterator iter = Play_Board.blocks.begin();
+	for (++iter; iter != Play_Board.blocks.end(); ++iter)
+	{
+		if (Play_Board.blocks.begin()->num == iter->num)
+		{
+			if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect))
+				iter->BlockStateChange(PULL);
+
+			// 좌우 검사 +1, -1 은 크기 보정값
+			else if (Play_Board.GetNowBlock()->center_pos.y == iter->center_pos.y
+				&& RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect, { 1, 0 }))
+				iter->BlockStateChange(PULL);
+
+			else if (Play_Board.GetNowBlock()->center_pos.y == iter->center_pos.y
+				&& RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect, { -1, 0 }))
+				iter->BlockStateChange(PULL);
+
+		}
+	}
+
+	KillTimer(hWnd, NAME_BLOCK_CHECK);
+	SetTimer(hWnd, NAME_BLOCK_PULL, TIME_BLOCK_PULL, (TIMERPROC)BlockPull);
+
+	InvalidateRect(hWnd, NULL, TRUE);
+	ReleaseDC(hWnd, hdc);
+}
+
 
 //
 //  함수: WndProc(HWND, UINT, WPARAM, LPARAM)
@@ -457,9 +566,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// ★ 수정 해야할 내용 ::
 		//		좌우에 충돌체가 있을 경우 이동 금지
 
-		if (wParam == 'A' && Play_Board.GetNowBlock()->state == IDLE) {
+		if (wParam == 'A' && Play_Board.GetNowBlock()->state == DROP 
+			&& Play_Board.GetNowBlock()->rect.left >= Play_Board.GetGameBoard().left +5 ) {
 			if (Play_Board.blocks.size() == 1) {
-				Play_Board.GetNowBlock()->BlockMove(LEFT);
+				Play_Board.GetNowBlock()->BlockMove(2, LEFT);
 				break;
 			}
 
@@ -468,13 +578,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect, { -Play_Board.GetBlockSize().witdh, 0 }))
 					break;
 				if (++iter == Play_Board.blocks.cend())
-					Play_Board.GetNowBlock()->BlockMove(LEFT);
+					Play_Board.GetNowBlock()->BlockMove(2 ,LEFT);
 			}
 		}
 
-		if (wParam == 'D' && Play_Board.GetNowBlock()->state == IDLE) {
+		if (wParam == 'D' && Play_Board.GetNowBlock()->state == DROP
+			&& Play_Board.GetNowBlock()->rect.right <= Play_Board.GetGameBoard().right -5) {
 			if (Play_Board.blocks.size() == 1) {
-				Play_Board.GetNowBlock()->BlockMove(RIGHT);
+				Play_Board.GetNowBlock()->BlockMove(2, RIGHT);
 				break;
 			}
 
@@ -483,7 +594,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (RectToRectCollision(Play_Board.GetNowBlock()->rect, iter->rect, { Play_Board.GetBlockSize().witdh, 0 }))
 					break;
 				if (++iter == Play_Board.blocks.cend())
-					Play_Board.GetNowBlock()->BlockMove(RIGHT);
+					Play_Board.GetNowBlock()->BlockMove(2, RIGHT);
 			}
 		}
 
